@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+build/
+
+# Database and generated files
+*.db
+*.sqlite3
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
