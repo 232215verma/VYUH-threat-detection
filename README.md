@@ -72,28 +72,31 @@ ML	Scikit-learn (Random Forest, Isolation Forest)
 Graph Analysis	NetworkX
 Backend	FastAPI, WebSocket
 Database	SQLite
-Frontend	React
+Frontend	React, TypeScript, Vite
 AI Assistant	RAG (knowledge base + semantic search), MITRE ATT&CK mapping, optional local LLM
 Project Structure
-
-Update this to match your actual repository.
-
 netgraph-sentinel/
 |-- backend/
-|   |-- main.py              # FastAPI app + WebSocket
-|   |-- detector.py          # Combines layers, confidence boost
-|   |-- graph_engine.py      # Live graph + shape detection
-|   |-- rules_engine.py      # Threshold rules
-|   |-- ml_models.py         # Random Forest + Isolation Forest
-|   |-- replayer.py          # Batch replay of flows
-|   |-- traffic_generator.py # Synthetic labelled data
-|   |-- rag_assistant.py     # MITRE ATT&CK explanations
+|   |-- main.py               # FastAPI app + WebSocket
+|   |-- pipeline.py           # Orchestrates the streaming pipeline
+|   |-- replayer.py           # Replays flows in batches (simulated live traffic)
+|   |-- flow_parser.py        # Parses flow records
+|   |-- features.py           # Feature extraction
+|   |-- graph_engine.py       # Live graph + shape detection
+|   |-- rules.py              # Threshold rules
+|   |-- anomaly.py            # Isolation Forest anomaly layer
+|   |-- detector.py           # Combines layers, confidence boost, severity
+|   |-- database.py           # SQLite alert storage
+|   |-- rag_engine.py         # RAG assistant for alert explanations
+|   |-- knowledge_base.py     # MITRE ATT&CK knowledge base
+|   |-- traffic_generator.py  # Synthetic labelled traffic generator
+|   |-- train_model.py        # Trains Random Forest + Isolation Forest
+|   |-- test_coverage.py      # Detection test cases
 |   `-- requirements.txt
-|-- frontend/
-|   |-- src/
-|   `-- package.json
-|-- data/
-|-- docs/
+|-- frontend/                 # React + TypeScript + Vite dashboard
+|   `-- src/components/       # LiveGraph, AlertFeed, AlertDrawer, ActivityChart, DemoPanel, SummaryReport
+|-- data/                     # Synthetic and sample flow CSVs
+|-- models/                   # Trained models (.pkl)
 `-- README.md
 Getting Started
 Prerequisites
@@ -120,7 +123,7 @@ Generate data and train models:
 
 bash
 python traffic_generator.py
-python ml_models.py
+python train_model.py
 
 Start the API server:
 
@@ -130,9 +133,9 @@ uvicorn main:app --reload --port 8000
 bash
 cd frontend
 npm install
-npm start
+npm run dev
 
-Open the dashboard at http://localhost:3000.
+Open the dashboard at the URL printed by Vite (usually http://localhost:5173).
 
 Dataset
 
