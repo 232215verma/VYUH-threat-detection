@@ -101,6 +101,16 @@ export default function App() {
   const [focusType, setFocusType] = useState<string | null>(null);
   const [liveMode, setLiveMode] = useState(true); // autonomous by default
 
+  // Responsive chart height only — purely visual, no detection logic involved.
+  const [chartHeight, setChartHeight] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth <= 560 ? 180 : 320
+  );
+  useEffect(() => {
+    const onResize = () => setChartHeight(window.innerWidth <= 560 ? 180 : 320);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const flowsRef = useRef(0);
   const liveModeRef = useRef(true);
   const isRunningRef = useRef(false);
@@ -412,7 +422,7 @@ export default function App() {
             <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.7 21a2 2 0 01-3.4 0" />
           </svg>
-          Alert Center
+          <span>Alert Center</span>
           <span className={`count-badge ${unseen > 0 ? "new" : ""}`}>{alerts.length}</span>
         </button>
       </header>
@@ -463,7 +473,7 @@ export default function App() {
           </div>
         </div>
         <div className="activity-body">
-          <ActivityChart data={history} height={320} focusType={focusType} totalAlerts={alerts.length} />
+          <ActivityChart data={history} height={chartHeight} focusType={focusType} totalAlerts={alerts.length} />
         </div>
       </section>
 

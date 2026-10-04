@@ -22,14 +22,16 @@
   --mono: 'JetBrains Mono', 'Consolas', monospace;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body, #root { height: 100%; margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 button { font-family: inherit; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -38,26 +40,30 @@ button { font-family: inherit; }
 
 .app {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  width: 100%;
 }
 
 /* ---------- Top bar ---------- */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   padding: 12px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
-.brand { display: flex; align-items: center; gap: 11px; }
+.brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 9px;
   display: grid; place-items: center;
+  flex-shrink: 0;
   background: linear-gradient(145deg, #e8a33c, #9a5a1a);
   box-shadow: 0 4px 14px rgba(232, 163, 60, 0.3);
 }
@@ -65,8 +71,12 @@ button { font-family: inherit; }
   font-family: var(--display);
   font-size: 18px; font-weight: 700; letter-spacing: 0.02em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-.brand-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.brand-sub {
+  font-size: 11px; color: var(--text-3); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .conn {
   display: flex; align-items: center; gap: 7px;
@@ -75,8 +85,10 @@ button { font-family: inherit; }
   border: 1px solid var(--line-2);
   border-radius: 999px;
   background: var(--surface-2);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
-.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); flex-shrink: 0; }
 .conn-dot.on { background: var(--ok); animation: ping 2s infinite; }
 @keyframes ping {
   0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
@@ -88,6 +100,9 @@ button { font-family: inherit; }
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
   font-size: 12.5px; color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
 }
 .spinner {
   width: 12px; height: 12px;
@@ -95,6 +110,7 @@ button { font-family: inherit; }
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -106,6 +122,8 @@ button { font-family: inherit; }
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary { background: var(--accent); color: #1a1105; }
@@ -144,6 +162,7 @@ button { font-family: inherit; }
   font-size: 10.5px; font-weight: 700;
   letter-spacing: 0.09em; text-transform: uppercase;
   color: var(--text-3); margin-right: 4px;
+  white-space: nowrap;
 }
 .chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -155,6 +174,7 @@ button { font-family: inherit; }
   font-size: 12px; font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .chip:hover:not(:disabled) {
   color: var(--text);
@@ -162,8 +182,8 @@ button { font-family: inherit; }
   background: var(--surface-2);
 }
 .chip:disabled { opacity: 0.45; cursor: not-allowed; }
-.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip-color); }
-.console-actions { margin-left: auto; display: flex; gap: 8px; }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip-color); flex-shrink: 0; }
+.console-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 
 .stage-banner {
   padding: 9px 24px;
@@ -174,7 +194,7 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 .stage-banner::before {
-  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
 }
 
 /* ---------- KPI row ---------- */
@@ -191,6 +211,7 @@ button { font-family: inherit; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px 16px;
+  min-width: 0;
 }
 .kpi::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -208,9 +229,6 @@ button { font-family: inherit; }
   font-variant-numeric: tabular-nums;
 }
 .kpi-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
-@media (max-width: 1100px) {
-  .kpis { grid-template-columns: repeat(2, 1fr); }
-}
 
 /* ---------- Detection activity (full width) ---------- */
 .activity-section {
@@ -250,6 +268,7 @@ button { font-family: inherit; }
   border-radius: 999px;
   border: 1px solid var(--line-2);
   color: var(--text-3);
+  white-space: nowrap;
 }
 .legend-item b { font-family: var(--mono); font-weight: 500; }
 .legend-item.active {
@@ -273,7 +292,7 @@ button { font-family: inherit; }
     radial-gradient(circle at 50% 45%, rgba(232, 163, 60, 0.07), transparent 65%),
     var(--surface);
 }
-.canvas-wrap canvas { display: block; }
+.canvas-wrap canvas { display: block; touch-action: none; }
 .graph-controls {
   position: absolute; top: 12px; right: 12px;
   display: flex; gap: 6px;
@@ -368,6 +387,7 @@ button { font-family: inherit; }
   font-size: 11.5px; font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .filter-chip:hover { color: var(--text); border-color: var(--text-3); }
 .filter-chip.active {
@@ -385,6 +405,7 @@ button { font-family: inherit; }
   font-family: inherit; font-size: 12px;
   cursor: pointer;
   outline: none;
+  max-width: 100%;
 }
 .select:focus { border-color: var(--accent); }
 .select option { background: var(--surface-2); color: var(--text); }
@@ -421,6 +442,7 @@ button { font-family: inherit; }
   font-family: var(--mono); font-size: 11.5px;
   padding: 1px 6px; border-radius: 5px;
   background: var(--surface-3); color: var(--text);
+  word-break: break-word;
 }
 .summary-title {
   font-family: var(--display);
@@ -447,6 +469,7 @@ button { font-family: inherit; }
   border-left: 3px solid var(--card-color, var(--accent));
   border-radius: var(--radius);
   flex-shrink: 0;
+  min-width: 0;
 }
 .card-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .card-title { font-family: var(--display); font-size: 15px; font-weight: 600; }
@@ -457,6 +480,7 @@ button { font-family: inherit; }
   border: 1px solid var(--line-2);
   background: var(--surface-3);
   color: var(--text-2);
+  white-space: nowrap;
 }
 .sev {
   margin-left: auto;
@@ -464,6 +488,7 @@ button { font-family: inherit; }
   border-radius: 999px;
   font-size: 10.5px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .conf { display: flex; align-items: center; gap: 10px; }
@@ -472,14 +497,16 @@ button { font-family: inherit; }
   border-radius: 999px;
   background: var(--line);
   overflow: hidden;
+  min-width: 0;
 }
 .conf-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
 .conf-num {
   min-width: 36px; text-align: right;
   font-family: var(--mono); font-size: 12px; color: var(--text-2);
+  flex-shrink: 0;
 }
 
-.card-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
+.card-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-2); word-break: break-word; }
 
 .meta {
   display: grid;
@@ -493,7 +520,7 @@ button { font-family: inherit; }
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-3);
 }
-.meta dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--text); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
 
 .layers { display: flex; flex-wrap: wrap; gap: 6px; }
 .layer-tag {
@@ -502,6 +529,7 @@ button { font-family: inherit; }
   border: 1px solid var(--line-2);
   background: var(--surface);
   font-size: 10.5px; color: var(--text-2);
+  white-space: nowrap;
 }
 .alert-card > .btn { align-self: flex-start; }
 
@@ -512,6 +540,7 @@ button { font-family: inherit; }
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  word-break: break-word;
 }
 .brief-head {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
@@ -535,15 +564,7 @@ button { font-family: inherit; }
   margin: 3px 0;
   font-family: var(--mono); font-size: 11.5px;
   line-height: 1.5; color: var(--text-2);
-}
-
-/* ---------- Small screens ---------- */
-@media (max-width: 720px) {
-  .topbar, .console, .stage-banner, .error-banner { padding-left: 14px; padding-right: 14px; }
-  .kpis { padding-left: 14px; padding-right: 14px; }
-  .activity-section { margin-left: 14px; margin-right: 14px; }
-  .stage { margin: 14px; }
-  .console-actions { margin-left: 0; width: 100%; }
+  word-break: break-word;
 }
 
 /* ---------- Activity chart (ActivityChart.tsx) ---------- */
@@ -560,7 +581,7 @@ button { font-family: inherit; }
 }
 .activity-hint { font-size: 11px; color: var(--text-3); }
 .activity-plot { position: relative; width: 100%; }
-.activity-svg { display: block; cursor: crosshair; }
+.activity-svg { display: block; cursor: crosshair; touch-action: none; }
 .activity-grid { stroke: var(--line); stroke-width: 1; }
 .activity-axis { stroke: var(--line-2); stroke-width: 1; }
 .activity-tick { fill: var(--text-3); font-size: 10px; font-family: var(--mono); }
@@ -590,6 +611,7 @@ button { font-family: inherit; }
   border: 1px solid var(--line-2);
   background: var(--surface-2);
   font-size: 11.5px; color: var(--text);
+  white-space: nowrap;
 }
 .activity-legend-item b { font-family: var(--mono); font-weight: 500; }
 .activity-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -604,11 +626,13 @@ button { font-family: inherit; }
   border: 1px solid rgba(52, 211, 153, 0.4);
   color: var(--ok);
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  white-space: nowrap;
 }
 .activity-live-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--ok);
   animation: livePulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
 }
 @keyframes livePulse {
   0%, 100% { opacity: 1; }
@@ -618,10 +642,11 @@ button { font-family: inherit; }
 .activity-now-dot { fill: var(--accent); animation: livePulse 1.6s ease-in-out infinite; }
 
 /* ---------- Live monitoring toggle (DemoPanel.tsx) ---------- */
-.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex-shrink: 0; }
 .btn-live-on { border-color: var(--ok); color: var(--ok); }
 .btn-live-on:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
 .btn-live-on .live-dot { background: var(--ok); animation: livePulse 1.6s ease-in-out infinite; }
+
 /* ---------- Threat type kebab menu ---------- */
 .legend-wrap {
   position: relative;
@@ -637,6 +662,7 @@ button { font-family: inherit; }
   cursor: pointer;
   border-radius: 4px;
   padding: 0;
+  flex-shrink: 0;
 }
 .kebab-btn:hover {
   color: var(--text);
@@ -648,6 +674,7 @@ button { font-family: inherit; }
   left: 0;
   z-index: 30;
   width: 300px;
+  max-width: calc(100vw - 32px);
   background: var(--surface-2);
   border: 1px solid var(--line-2);
   border-radius: 10px;
@@ -700,4 +727,82 @@ button { font-family: inherit; }
 }
 .threat-popover-footer button {
   width: 100%;
+}
+
+/* =====================================================================
+   RESPONSIVE — Tablet (≤1024px)
+===================================================================== */
+@media (max-width: 1024px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .stage { min-height: 380px; }
+  .canvas-wrap { min-height: 300px; }
+}
+
+/* =====================================================================
+   RESPONSIVE — Small tablet / large phone (≤720px)
+===================================================================== */
+@media (max-width: 720px) {
+  .topbar { padding: 10px 14px; row-gap: 8px; }
+  .console, .stage-banner, .error-banner { padding-left: 14px; padding-right: 14px; }
+  .kpis { padding-left: 14px; padding-right: 14px; gap: 10px; }
+  .activity-section { margin-left: 14px; margin-right: 14px; }
+  .stage { margin: 14px; }
+  .console-actions { margin-left: 0; width: 100%; }
+
+  .brand-sub { display: none; }
+  .topbar-status { order: 5; width: 100%; margin-left: 0; }
+  .topbar-status .spinner { flex-shrink: 0; }
+
+  .drawer-head, .drawer-filters, .drawer-body { padding-left: 14px; padding-right: 14px; }
+}
+
+/* =====================================================================
+   RESPONSIVE — Mobile (≤560px)
+===================================================================== */
+@media (max-width: 560px) {
+  body { font-size: 13.5px; }
+
+  .kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .kpi { padding: 11px 12px; }
+  .kpi-value { font-size: 24px; }
+  .kpi-label { font-size: 9.5px; }
+  .kpi-sub { font-size: 10.5px; }
+
+  .stage { min-height: 300px; margin: 12px; }
+  .canvas-wrap { min-height: 260px; }
+  .stage-head { padding: 12px 14px; }
+
+  .drawer { width: 100vw; }
+
+  .btn { padding: 7px 11px; font-size: 12px; }
+  .btn-alert span.count-badge { font-size: 10.5px; }
+
+  .chip { padding: 5px 10px; font-size: 11.5px; }
+  .console-label { width: 100%; margin-bottom: 2px; }
+
+  .alert-card { padding: 12px 13px; }
+  .card-title { font-size: 14px; }
+
+  /* Popover becomes a bottom sheet so it never overflows the screen width */
+  .threat-popover {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    width: auto;
+    max-width: none;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
+
+/* =====================================================================
+   RESPONSIVE — Very small phones (≤380px)
+===================================================================== */
+@media (max-width: 380px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .brand-name { font-size: 16px; }
+  .topbar { gap: 8px 10px; }
+  .btn span:not(.count-badge) { display: none; }
 }
