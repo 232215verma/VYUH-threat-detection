@@ -203,7 +203,7 @@ export default function App() {
     let cancelled = false;
 
      function connect() {
-      const ws = new WebSocket(`${WS_BASE}/ws`);
+     const ws = new WebSocket(`${WS_BASE}/ws/live`);
       wsRef.current = ws;
 
       ws.onopen = () => {
