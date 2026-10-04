@@ -26,7 +26,7 @@ const RIPPLE = 0.09; // strength of the flowing ripple travelling along the wave
 const SAMPLES = 260; // points per wave
 
 const M = { top: 12, right: 14, bottom: 34, left: 46 };
-const FALLBACK_COLOR = "#38bdf8";
+const FALLBACK_COLOR = "#e8a33c";
 const IDLE = "__idle__";
 
 /* ---------- Helpers ---------- */

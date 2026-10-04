@@ -3,6 +3,9 @@ import AlertDrawer from "./components/AlertDrawer";
 import LiveGraph, { GraphNode, GraphLink } from "./components/LiveGraph";
 import ActivityChart, { ActivityPoint } from "./components/ActivityChart";
 import DemoPanel from "./components/DemoPanel";
+import ThreatTypeMenu from "./components/ThreatTypeMenu";
+
+import { SHOW_SHAPE_EVENT } from "./components/AlertFeed";
 import { Alert, WsMessage } from "./types";
 import { THREAT_INFO, THREAT_ORDER, severityOf } from "./threatInfo";
 
@@ -28,9 +31,62 @@ const SCENARIO_TYPE: Record<string, string> = {
   ddos: "DDoS",
 };
 
+// What the topology graph is showing, in plain words
+const SHAPE_NAME: Record<string, string> = {
+  PortScan: "star pattern: one host probing many targets",
+  DDoS: "hub pattern: many sources converging on one target",
+  DGA: "fan-out pattern: one host contacting many one-off destinations",
+  C2Beaconing: "repeating edge: a fixed check-in to one controller",
+  DNSTunneling: "oversized DNS edge: one host to one resolver",
+  Exfiltration: "outbound burst: one host to one external destination",
+};
+
+// ---------------------------------------------------------------------------
+// The topology graph shows ONE shape: the threat being detected right now.
+// ---------------------------------------------------------------------------
+interface ShapeState {
+  type: string | null;
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+const EMPTY_SHAPE: ShapeState = { type: null, nodes: [], links: [] };
+
+/** Nodes + links one alert describes: the backend's full shape if present, else a plain source -> target edge. */
+function shapeParts(alert: Alert): { nodes: GraphNode[]; links: GraphLink[] } {
+  if (alert.graph && alert.graph.links.length > 0) {
+    return { nodes: alert.graph.nodes, links: alert.graph.links };
+  }
+  const nodes: GraphNode[] = [];
+  for (const id of [alert.source, alert.target]) {
+    if (id) nodes.push({ id, flagged: true, types: [alert.type], primaryType: alert.type });
+  }
+  const links: GraphLink[] =
+    alert.source && alert.target ? [{ source: alert.source, target: alert.target, type: alert.type }] : [];
+  return { nodes, links };
+}
+
+/** Same threat type -> grow the current shape. Different type -> replace it with the new one. */
+function mergeAlertIntoShape(prev: ShapeState, alert: Alert): ShapeState {
+  const parts = shapeParts(alert);
+  const base: ShapeState = prev.type === alert.type ? prev : { type: alert.type, nodes: [], links: [] };
+
+  const nodeMap = new Map<string, GraphNode>(base.nodes.map((n) => [n.id, n]));
+  for (const n of parts.nodes) if (!nodeMap.has(n.id)) nodeMap.set(n.id, n);
+
+  const linkMap = new Map<string, GraphLink>(base.links.map((l) => [`${l.source}->${l.target}`, l]));
+  for (const l of parts.links) {
+    const key = `${l.source}->${l.target}`;
+    if (!linkMap.has(key)) linkMap.set(key, l);
+  }
+
+  return { type: alert.type, nodes: Array.from(nodeMap.values()), links: Array.from(linkMap.values()) };
+}
+
 export default function App() {
   const [connected, setConnected] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [shape, setShape] = useState<ShapeState>(EMPTY_SHAPE);
   const [status, setStatus] = useState("Idle");
   const [totalFlows, setTotalFlows] = useState<number | null>(null);
   const [flowsSoFar, setFlowsSoFar] = useState(0);
@@ -40,6 +96,7 @@ export default function App() {
   const [stageText, setStageText] = useState<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [presetType, setPresetType] = useState<string | null>(null);
   const [seenCount, setSeenCount] = useState(0);
   const [focusType, setFocusType] = useState<string | null>(null);
   const [liveMode, setLiveMode] = useState(true); // autonomous by default
@@ -57,41 +114,33 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
 
+  // The graph drawn on screen = the current shape, with its centre node marked.
   const graph = useMemo(() => {
-    const nodeBest = new Map<string, { types: Set<string>; primaryType: string; best: number }>();
-    const linkKeys = new Set<string>();
-    const links: GraphLink[] = [];
-
-    for (const alert of alerts) {
-      for (const id of [alert.source, alert.target]) {
-        if (!id) continue;
-        const existing = nodeBest.get(id);
-        if (!existing) {
-          nodeBest.set(id, { types: new Set([alert.type]), primaryType: alert.type, best: alert.confidence });
-        } else {
-          existing.types.add(alert.type);
-          if (alert.confidence > existing.best) {
-            existing.primaryType = alert.type;
-            existing.best = alert.confidence;
-          }
-        }
-      }
-      if (alert.source && alert.target) {
-        const key = `${alert.source}->${alert.target}->${alert.type}`;
-        if (!linkKeys.has(key)) {
-          linkKeys.add(key);
-          links.push({ source: alert.source, target: alert.target, type: alert.type });
-        }
+    const degree = new Map<string, number>();
+    for (const l of shape.links) {
+      degree.set(l.source, (degree.get(l.source) ?? 0) + 1);
+      degree.set(l.target, (degree.get(l.target) ?? 0) + 1);
+    }
+    let centerId: string | null = null;
+    let best = 2; // a centre needs at least 3 connections
+    for (const [id, d] of degree) {
+      if (d > best) {
+        best = d;
+        centerId = id;
       }
     }
+    const nodes: GraphNode[] = shape.nodes.map((n) => ({ ...n, center: n.id === centerId }));
+    return { nodes, links: shape.links };
+  }, [shape]);
 
-    const nodes: GraphNode[] = Array.from(nodeBest.entries()).map(([id, d]) => ({
-      id,
-      flagged: true,
-      types: Array.from(d.types),
-      primaryType: d.primaryType,
-    }));
-    return { nodes, links };
+  // Total distinct hosts across ALL alerts (not just the shape on screen), for the KPI + drawer.
+  const flaggedHostCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of alerts) {
+      if (a.source) ids.add(a.source);
+      if (a.target) ids.add(a.target);
+    }
+    return ids.size;
   }, [alerts]);
 
   const typeCounts = useMemo(() => {
@@ -114,6 +163,18 @@ export default function App() {
   useEffect(() => {
     if (drawerOpen) setSeenCount(alerts.length);
   }, [drawerOpen, alerts.length]);
+
+  // "Show on graph" button on an alert card: draw exactly that alert's shape.
+  useEffect(() => {
+    const onShowShape = (e: Event) => {
+      const alert = (e as CustomEvent<Alert>).detail;
+      if (!alert) return;
+      setShape(mergeAlertIntoShape(EMPTY_SHAPE, alert));
+      setDrawerOpen(false);
+    };
+    window.addEventListener(SHOW_SHAPE_EVENT, onShowShape);
+    return () => window.removeEventListener(SHOW_SHAPE_EVENT, onShowShape);
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/alerts`)
@@ -156,6 +217,7 @@ export default function App() {
             setTotalFlows(msg.total_flows ?? null);
             setIsComplete(false);
             setIsRunning(true);
+            setShape(EMPTY_SHAPE); // new run -> clear the previous attack's shape
             break;
           case "batch_processed":
             flowsRef.current = msg.flows_so_far ?? 0;
@@ -165,6 +227,7 @@ export default function App() {
           case "alert":
             if (msg.alert) {
               setAlerts((prev) => [msg.alert!, ...prev]);
+              setShape((prev) => mergeAlertIntoShape(prev, msg.alert!));
               pushHistoryPoint(msg.alert.type);
             }
             break;
@@ -205,6 +268,7 @@ export default function App() {
   const startSimulation = async () => {
     resetForNewRun();
     setFocusType(null);
+    setShape(EMPTY_SHAPE);
     setStatus("Starting dataset replay…");
     setErrorBanner(null);
     try {
@@ -218,6 +282,7 @@ export default function App() {
   const triggerAttack = async (attack: string) => {
     resetForNewRun();
     setFocusType(liveModeRef.current ? null : SCENARIO_TYPE[attack] ?? null);
+    setShape(EMPTY_SHAPE);
     setStatus("Launching scenario…");
     setErrorBanner(null);
     try {
@@ -231,6 +296,7 @@ export default function App() {
   const triggerFullDemo = async () => {
     resetForNewRun();
     setFocusType(null);
+    setShape(EMPTY_SHAPE);
     setStatus("Running scripted demo…");
     setErrorBanner(null);
     try {
@@ -250,6 +316,7 @@ export default function App() {
     setHistory([]);
     setFocusType(null);
     setAlerts([]);
+    setShape(EMPTY_SHAPE);
     setSeenCount(0);
     setTotalFlows(null);
     setStatus("Cleared");
@@ -302,6 +369,11 @@ export default function App() {
   const unseen = Math.max(0, alerts.length - seenCount);
   const categories = Object.keys(typeCounts).length;
 
+  const shapeTitle = shape.type ? THREAT_INFO[shape.type]?.label ?? shape.type : null;
+  const shapeSub = shape.type
+    ? `${shapeTitle}: ${SHAPE_NAME[shape.type] ?? "pattern detected"} (${graph.nodes.length} nodes)`
+    : "The shape of the threat being detected right now";
+
   return (
     <div className="app">
       {errorBanner && <div className="error-banner">{errorBanner}</div>}
@@ -317,8 +389,8 @@ export default function App() {
             </svg>
           </div>
           <div>
-            <div className="brand-name">NetGraph Sentinel</div>
-            <div className="brand-sub">Graph-based passive threat detection</div>
+            <div className="brand-name">VYUH</div>
+            <div className="brand-sub">व्यूह — Graph-Based Passive Threat Detection</div>
           </div>
         </div>
 
@@ -357,7 +429,7 @@ export default function App() {
       {stageText && <div className="stage-banner">{stageText.replace(/^[^A-Za-z0-9]+/, "")}</div>}
 
       <section className="kpis">
-        <div className="kpi" style={{ ["--kpi-color" as string]: "#38bdf8" }}>
+        <div className="kpi" style={{ ["--kpi-color" as string]: "#e8a33c" }}>
           <div className="kpi-label">Total alerts</div>
           <div className="kpi-value">{alerts.length}</div>
           <div className="kpi-sub">
@@ -371,7 +443,7 @@ export default function App() {
         </div>
         <div className="kpi" style={{ ["--kpi-color" as string]: "#a78bfa" }}>
           <div className="kpi-label">Hosts flagged</div>
-          <div className="kpi-value">{graph.nodes.length}</div>
+          <div className="kpi-value">{flaggedHostCount}</div>
           <div className="kpi-sub">Distinct IP addresses</div>
         </div>
         <div className="kpi" style={{ ["--kpi-color" as string]: "#34d399" }}>
@@ -399,42 +471,45 @@ export default function App() {
         <div className="stage-head">
           <div>
             <div className="stage-title">Network topology</div>
-            <div className="stage-sub">Hosts and connections implicated in detected threats</div>
+            <div className="stage-sub">{shapeSub}</div>
           </div>
-          <div className="legend">
-            {THREAT_ORDER.map((type) => {
-              const info = THREAT_INFO[type];
-              const count = typeCounts[type] || 0;
-              return (
-                <span key={type} className={`legend-item ${count > 0 ? "active" : ""}`}>
-                  <span className="legend-dot" style={{ background: info.color }} />
-                  {info.label} <b>{count}</b>
-                </span>
-              );
-            })}
-          </div>
+       <div className="legend">
+  {THREAT_ORDER.map((type) => (
+    <ThreatTypeMenu
+      key={type}
+      type={type}
+      alerts={alerts}
+      onViewAll={() => {
+        setPresetType(type);
+        setDrawerOpen(true);
+      }}
+    />
+  ))}
+</div>
         </div>
 
         <LiveGraph nodes={graph.nodes} links={graph.links}>
           {graph.nodes.length === 0 && (
             <div className="empty">
-              <div className="empty-title">No activity yet</div>
+              <div className="empty-title">No active threat shape</div>
               <div className="empty-text">
-                Launch a scenario from the console above, or replay the dataset, to see the network topology build in real time.
+                Launch a scenario from the console above, or replay the dataset, and the shape of the attack will be
+                drawn here. You can also open the Alert Center and press "Show on graph" on any past alert.
               </div>
             </div>
           )}
         </LiveGraph>
       </section>
 
-      <AlertDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        alerts={alerts}
-        isComplete={isComplete}
-        totalFlows={totalFlows}
-        flaggedIpCount={graph.nodes.length}
-      />
+<AlertDrawer
+  open={drawerOpen}
+  onClose={() => setDrawerOpen(false)}
+  alerts={alerts}
+  isComplete={isComplete}
+  totalFlows={totalFlows}
+  flaggedIpCount={graph.nodes.length}
+  presetType={presetType}
+/>
     </div>
   );
 }

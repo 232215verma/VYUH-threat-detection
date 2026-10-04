@@ -4,6 +4,9 @@ import { THREAT_INFO, SEVERITY_META, LAYER_LABELS, severityOf, alertKey } from "
 
 const API_BASE = "http://localhost:8000";
 
+/** Event name App.tsx listens for: "draw this alert's shape on the topology graph". */
+export const SHOW_SHAPE_EVENT = "netgraph:show-shape";
+
 interface Brief {
   explanation: string;
   mitre_id: string | null;
@@ -19,6 +22,10 @@ interface Props {
 export default function AlertFeed({ alerts }: Props) {
   const [briefs, setBriefs] = useState<Record<string, Brief>>({});
   const [loading, setLoading] = useState<string | null>(null);
+
+  const showOnGraph = (alert: Alert) => {
+    window.dispatchEvent(new CustomEvent<Alert>(SHOW_SHAPE_EVENT, { detail: alert }));
+  };
 
   const explain = async (alert: Alert) => {
     const key = alertKey(alert);
@@ -118,11 +125,16 @@ export default function AlertFeed({ alerts }: Props) {
               ))}
             </div>
 
-            {!brief && (
-              <button className="btn btn-ghost btn-sm" disabled={loading === key} onClick={() => explain(alert)}>
-                {loading === key ? "Analyzing…" : "Explain alert"}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => showOnGraph(alert)}>
+                Show on graph
               </button>
-            )}
+              {!brief && (
+                <button className="btn btn-ghost btn-sm" disabled={loading === key} onClick={() => explain(alert)}>
+                  {loading === key ? "Analyzing…" : "Explain alert"}
+                </button>
+              )}
+            </div>
 
             {brief && (
               <div className="brief">

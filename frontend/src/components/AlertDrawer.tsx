@@ -11,11 +11,20 @@ interface Props {
   isComplete: boolean;
   totalFlows: number | null;
   flaggedIpCount: number;
+  presetType?: string | null;
 }
 
-export default function AlertDrawer({ open, onClose, alerts, isComplete, totalFlows, flaggedIpCount }: Props) {
+export default function AlertDrawer({ open, onClose, alerts, isComplete, totalFlows, flaggedIpCount, presetType }: Props) {
   const [sev, setSev] = useState<"all" | Severity>("all");
   const [type, setType] = useState("all");
+
+  // When opened from a threat-type menu, jump straight to that filter.
+  useEffect(() => {
+    if (open && presetType) {
+      setType(presetType);
+      setSev("all");
+    }
+  }, [open, presetType]);
 
   useEffect(() => {
     if (!open) return;

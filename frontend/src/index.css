@@ -1,23 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #080b12;
-  --surface: #0e131e;
-  --surface-2: #131a28;
-  --surface-3: #19223a;
-  --line: #1c2538;
-  --line-2: #28344d;
-  --text: #e7ebf3;
-  --text-2: #98a4b9;
-  --text-3: #64718a;
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.12);
+  --bg: #0c0a07;
+  --surface: #16110a;
+  --surface-2: #1c160d;
+  --surface-3: #241c10;
+  --line: #2b2213;
+  --line-2: #3c301b;
+  --text: #f2ece0;
+  --text-2: #b7a98c;
+  --text-3: #8a7c5e;
+  --accent: #e8a33c;
+  --accent-soft: rgba(232, 163, 60, 0.14);
   --ok: #34d399;
   --bad: #f87171;
   --sev-critical: #f43f5e;
   --radius: 12px;
   --radius-sm: 8px;
   --sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --display: 'Rajdhani', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --mono: 'JetBrains Mono', 'Consolas', monospace;
 }
 
@@ -57,10 +58,14 @@ button { font-family: inherit; }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 9px;
   display: grid; place-items: center;
-  background: linear-gradient(145deg, #0ea5e9, #6366f1);
-  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25);
+  background: linear-gradient(145deg, #e8a33c, #9a5a1a);
+  box-shadow: 0 4px 14px rgba(232, 163, 60, 0.3);
 }
-.brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-name {
+  font-family: var(--display);
+  font-size: 18px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 .brand-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
 
 .conn {
@@ -103,8 +108,8 @@ button { font-family: inherit; }
   transition: all 0.15s ease;
 }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: #04121c; }
-.btn-primary:hover:not(:disabled) { background: #7dd3fc; }
+.btn-primary { background: var(--accent); color: #1a1105; }
+.btn-primary:hover:not(:disabled) { background: #f3b85c; }
 .btn-ghost { background: transparent; border-color: var(--line-2); color: var(--text-2); }
 .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text-3); }
 .btn-alert { background: var(--surface-3); border-color: var(--line-2); color: var(--text); }
@@ -197,9 +202,9 @@ button { font-family: inherit; }
   color: var(--text-3);
 }
 .kpi-value {
-  font-family: var(--mono);
-  font-size: 28px; font-weight: 500;
-  margin-top: 6px; letter-spacing: -0.02em;
+  font-family: var(--display);
+  font-size: 30px; font-weight: 600;
+  margin-top: 6px; letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
 }
 .kpi-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
@@ -236,7 +241,7 @@ button { font-family: inherit; }
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
 }
-.stage-title { font-size: 14px; font-weight: 600; }
+.stage-title { font-family: var(--display); font-size: 16px; font-weight: 600; }
 .stage-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px; }
 .legend-item {
@@ -265,7 +270,7 @@ button { font-family: inherit; }
   min-height: 340px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 45%, rgba(56, 189, 248, 0.06), transparent 65%),
+    radial-gradient(circle at 50% 45%, rgba(232, 163, 60, 0.07), transparent 65%),
     var(--surface);
 }
 .canvas-wrap canvas { display: block; }
@@ -302,7 +307,7 @@ button { font-family: inherit; }
 /* ---------- Alert drawer (AlertDrawer.tsx) ---------- */
 .drawer-backdrop {
   position: fixed; inset: 0;
-  background: rgba(2, 6, 14, 0.6);
+  background: rgba(10, 7, 3, 0.6);
   backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
@@ -332,7 +337,7 @@ button { font-family: inherit; }
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
-.drawer-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.drawer-title { font-family: var(--display); font-size: 18px; font-weight: 700; letter-spacing: 0.01em; }
 .drawer-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
 
 .icon-btn {
@@ -418,7 +423,8 @@ button { font-family: inherit; }
   background: var(--surface-3); color: var(--text);
 }
 .summary-title {
-  font-size: 10.5px; font-weight: 700;
+  font-family: var(--display);
+  font-size: 11px; font-weight: 700;
   letter-spacing: 0.09em; text-transform: uppercase;
   color: var(--accent);
 }
@@ -443,7 +449,7 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 .card-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.card-title { font-size: 14px; font-weight: 600; }
+.card-title { font-family: var(--display); font-size: 15px; font-weight: 600; }
 .mitre-tag {
   font-family: var(--mono); font-size: 10.5px;
   padding: 2px 7px;
@@ -502,7 +508,7 @@ button { font-family: inherit; }
 .brief {
   display: flex; flex-direction: column; gap: 6px;
   padding: 10px 12px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  border: 1px solid rgba(232, 163, 60, 0.3);
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   font-size: 12.5px; line-height: 1.55; color: var(--text-2);
@@ -549,7 +555,7 @@ button { font-family: inherit; }
 }
 .activity-now { font-size: 12px; color: var(--text-2); }
 .activity-now-num {
-  font-family: var(--mono); font-size: 20px; font-weight: 500;
+  font-family: var(--display); font-size: 22px; font-weight: 600;
   color: var(--text); margin-right: 6px;
 }
 .activity-hint { font-size: 11px; color: var(--text-3); }
@@ -616,3 +622,82 @@ button { font-family: inherit; }
 .btn-live-on { border-color: var(--ok); color: var(--ok); }
 .btn-live-on:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
 .btn-live-on .live-dot { background: var(--ok); animation: livePulse 1.6s ease-in-out infinite; }
+/* ---------- Threat type kebab menu ---------- */
+.legend-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.kebab-btn {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  border: none; background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+.kebab-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.threat-popover {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  z-index: 30;
+  width: 300px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  padding: 12px;
+}
+.threat-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.threat-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 230px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.threat-popover-row {
+  font-size: 11px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.threat-popover-row .r-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.threat-popover-row .r-conf {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+.threat-popover-empty {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 16px 4px;
+  line-height: 1.5;
+}
+.threat-popover-footer button {
+  width: 100%;
+}

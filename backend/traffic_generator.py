@@ -10,6 +10,11 @@ Produces a mix of:
   - benign traffic (normal-looking connections)
   - one or more of the 6 threats: portscan, ddos, c2, dga, dnstunnel, exfil
 
+Graph shapes the attacks are built to produce:
+  - portscan -> STAR  (one scanner -> many hosts, plus many ports on one host)
+  - ddos     -> HUB   (many sources -> one target)
+  - dga      -> fan-out (one bot -> many one-off DNS destinations)
+
 Usage:
     python traffic_generator.py                      # benign + all 6 attacks
     python traffic_generator.py --attack portscan     # benign + just portscan
@@ -47,6 +52,13 @@ def _random_internal_ip() -> str:
 
 def _random_external_ip() -> str:
     return str(ipaddress.IPv4Address(random.randint(0x08000000, 0xDFFFFFFF)))
+
+
+def _distinct_internal_ips(n: int, exclude: set | None = None) -> list[str]:
+    """n different internal IPs, none of them in `exclude`."""
+    exclude = set(exclude or [])
+    pool = [f"192.168.1.{i}" for i in range(2, 251) if f"192.168.1.{i}" not in exclude]
+    return random.sample(pool, n)
 
 
 def _fmt(ts: datetime) -> str:
@@ -90,19 +102,32 @@ def generate_benign_traffic(n: int, start_time: datetime) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 1. Port Scanning — one attacker IP hits MANY ports on one target, fast
+# 1. Port Scanning — a STAR: one attacker sweeps MANY hosts (a few ports
+#    each) AND hammers one main target across MANY ports, all very fast
 # ---------------------------------------------------------------------------
 def generate_port_scan(start_time: datetime, attacker_ip: str = None,
-                        target_ip: str = None, num_ports: int = 60) -> list[dict]:
+                        target_ip: str = None, num_ports: int = 60,
+                        num_hosts: int = 12, ports_per_host: int = 3) -> list[dict]:
     attacker_ip = attacker_ip or _random_internal_ip()
-    target_ip = target_ip or _random_internal_ip()
+    if target_ip is None:
+        target_ip = _distinct_internal_ips(1, exclude={attacker_ip})[0]
+
+    # extra hosts for the horizontal sweep (star arms)
+    sweep_hosts = _distinct_internal_ips(num_hosts, exclude={attacker_ip, target_ip})
+
+    probes = [(target_ip, p) for p in random.sample(range(1, 10000), num_ports)]
+    for host in sweep_hosts:
+        for p in random.sample([21, 22, 23, 25, 80, 135, 139, 443, 445, 3306, 3389, 8080], ports_per_host):
+            probes.append((host, p))
+    random.shuffle(probes)
+
     rows = []
     t = start_time
-    for port in random.sample(range(1, 10000), num_ports):
+    for dst_ip, port in probes:
         t += timedelta(milliseconds=random.uniform(10, 80))  # very fast
         rows.append({
             "Source IP": attacker_ip,
-            "Destination IP": target_ip,
+            "Destination IP": dst_ip,
             "Source Port": random.randint(40000, 65000),
             "Destination Port": port,
             "Protocol": 6,
@@ -118,17 +143,24 @@ def generate_port_scan(start_time: datetime, attacker_ip: str = None,
 
 
 # ---------------------------------------------------------------------------
-# 2. DDoS — MANY source IPs flood ONE target, in a short time window
+# 2. DDoS — a HUB: MANY source IPs flood ONE target, in a short time window
 # ---------------------------------------------------------------------------
 def generate_ddos(start_time: datetime, target_ip: str = None,
                    num_attackers: int = 200) -> list[dict]:
     target_ip = target_ip or _random_internal_ip()
+
+    # guarantee every attacker IP is DIFFERENT, so the hub really has
+    # `num_attackers` spokes instead of a few accidental duplicates
+    sources = set()
+    while len(sources) < num_attackers:
+        sources.add(_random_external_ip())
+
     rows = []
     t = start_time
-    for _ in range(num_attackers):
+    for src_ip in sources:
         t += timedelta(milliseconds=random.uniform(1, 20))  # flood — very tight timing
         rows.append({
-            "Source IP": _random_external_ip(),
+            "Source IP": src_ip,
             "Destination IP": target_ip,
             "Source Port": random.randint(1024, 65000),
             "Destination Port": 80,
@@ -181,13 +213,18 @@ def generate_c2_beaconing(start_time: datetime, bot_ip: str = None,
 def generate_dga_domains(start_time: datetime, bot_ip: str = None,
                           num_domains: int = 40) -> list[dict]:
     bot_ip = bot_ip or _random_internal_ip()
+
+    destinations = set()
+    while len(destinations) < num_domains:
+        destinations.add(_random_external_ip())
+
     rows = []
     t = start_time
-    for _ in range(num_domains):
+    for dst_ip in destinations:
         t += timedelta(seconds=random.uniform(2, 10))
         rows.append({
             "Source IP": bot_ip,
-            "Destination IP": _random_external_ip(),  # stands in for a DGA domain's IP
+            "Destination IP": dst_ip,  # stands in for a DGA domain's IP
             "Source Port": random.randint(40000, 65000),
             "Destination Port": 53,
             "Protocol": 17,  # UDP, typical for DNS

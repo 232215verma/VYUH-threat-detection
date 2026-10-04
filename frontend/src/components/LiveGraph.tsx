@@ -7,6 +7,8 @@ export interface GraphNode {
   flagged: boolean;
   types: string[];
   primaryType: string;
+  /** The middle of the shape (scanner of a star, target of a hub). Drawn bigger and always labelled. */
+  center?: boolean;
 }
 
 export interface GraphLink {
@@ -20,6 +22,10 @@ interface Props {
   links: GraphLink[];
   children?: ReactNode;
 }
+
+// Small graphs: label every node. Big graphs: label only the centre, and the rest once zoomed in.
+const LABEL_ALL_MAX_NODES = 8;
+const LABEL_ZOOM = 2.2;
 
 export default function LiveGraph({ nodes, links, children }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -63,29 +69,44 @@ export default function LiveGraph({ nodes, links, children }: Props) {
     fgRef.current?.zoomToFit(400, 70);
   }, []);
 
-  const drawNode = useCallback((node: any, ctx: CanvasRenderingContext2D, scale: number) => {
-    const color = THREAT_INFO[node.primaryType]?.color || "#38bdf8";
-    const r = 5 / scale;
+  // A new shape replaced the old one: re-frame the view once it settles.
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const t = window.setTimeout(fit, 700);
+    return () => clearTimeout(t);
+  }, [nodes.length, fit]);
 
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r * 2.1, 0, 2 * Math.PI);
-    ctx.fillStyle = `${color}22`;
-    ctx.fill();
+  const labelAll = nodes.length <= LABEL_ALL_MAX_NODES;
 
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = "#0e131e";
-    ctx.lineWidth = 1.2 / scale;
-    ctx.stroke();
+  const drawNode = useCallback(
+    (node: any, ctx: CanvasRenderingContext2D, scale: number) => {
+      const color = THREAT_INFO[node.primaryType]?.color || "#e8a33c";
+      const isCenter = !!node.center;
+      const r = (isCenter ? 9 : 4) / scale;
 
-    ctx.font = `${10.5 / scale}px 'JetBrains Mono', monospace`;
-    ctx.fillStyle = "#98a4b9";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(node.id, node.x + r + 4 / scale, node.y);
-  }, []);
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r * 2.1, 0, 2 * Math.PI);
+      ctx.fillStyle = `${color}${isCenter ? "33" : "22"}`;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = "#0e131e";
+      ctx.lineWidth = 1.2 / scale;
+      ctx.stroke();
+
+      if (isCenter || labelAll || scale > LABEL_ZOOM) {
+        ctx.font = `${(isCenter ? 12 : 10.5) / scale}px 'JetBrains Mono', monospace`;
+        ctx.fillStyle = isCenter ? "#e6ebf5" : "#98a4b9";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(node.id, node.x + r + 4 / scale, node.y);
+      }
+    },
+    [labelAll]
+  );
 
   return (
     <div ref={wrapRef} className="canvas-wrap">
@@ -104,7 +125,7 @@ export default function LiveGraph({ nodes, links, children }: Props) {
           nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(node.x, node.y, 9, 0, 2 * Math.PI);
+            ctx.arc(node.x, node.y, node.center ? 12 : 8, 0, 2 * Math.PI);
             ctx.fill();
           }}
           linkColor={(link: any) => `${THREAT_INFO[link.type]?.color || "#64718a"}aa`}

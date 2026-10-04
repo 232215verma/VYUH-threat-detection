@@ -1,5 +1,14 @@
 """
 NetGraph Sentinel — Phase 4/7: Live Pipeline + Demo Sequences
+
+Every NEW alert is broadcast over the WebSocket together with the graph
+shape it describes:
+
+    {"event": "alert", "alert": {..., "graph": {"nodes": [...], "links": [...]}}}
+
+so the dashboard can draw a real star (port scan) / hub (DDoS) / fan-out
+(DGA) instead of a single line. The alert saved to the database is the
+original one, without the "graph" field.
 """
 
 import asyncio
@@ -10,6 +19,7 @@ import pandas as pd
 from flow_parser import load_and_normalize, normalize_flows
 from detector import detect_flows
 from database import save_alert
+from graph_engine import build_graph, get_graph_anomalies, alert_to_graph_elements
 from traffic_generator import (
     ATTACK_GENERATORS,
     generate_benign_traffic,
@@ -19,7 +29,7 @@ from traffic_generator import (
 RUN_DETECTOR_EVERY_N_BATCHES = 3
 
 DEMO_NARRATION = {
-    "portscan": "🚪 Port Scan — one host is probing many ports on a target, looking for an open door.",
+    "portscan": "🚪 Port Scan — one host is probing many hosts and ports, looking for an open door.",
     "dga": "🎲 DGA Domains — malware is generating random domain names to find its control server.",
     "dnstunnel": "🕳️ DNS Tunneling — data is being smuggled out disguised as oversized DNS lookups.",
     "c2": "📡 C2 Beaconing — an infected host is checking in with its controller on a fixed schedule.",
@@ -32,6 +42,77 @@ def _alert_key(alert: dict) -> tuple:
     return (alert["type"], alert.get("source"), alert.get("target"))
 
 
+# ---------------------------------------------------------------------------
+# Graph shape for an alert
+# ---------------------------------------------------------------------------
+def _graph_for_alert(alert: dict, graph_alerts: list[dict]) -> dict:
+    """
+    Find the graph-engine alert(s) describing the same threat (same type,
+    same source or same target) and merge their nodes/links. A port scan
+    that is found both as "many ports on one host" and "many hosts" ends
+    up as ONE combined star. If nothing matches, fall back to a plain
+    source -> target edge.
+    """
+    t = alert["type"]
+    nodes: dict[str, dict] = {}
+    links: dict[tuple, dict] = {}
+
+    for ga in graph_alerts:
+        if ga["type"] != t:
+            continue
+        same_src = bool(alert.get("source")) and ga.get("source") == alert.get("source")
+        same_tgt = bool(alert.get("target")) and ga.get("target") == alert.get("target")
+        if not (same_src or same_tgt):
+            continue
+        n, l = alert_to_graph_elements(ga)
+        for node in n:
+            nodes.setdefault(node["id"], node)
+        for link in l:
+            links.setdefault((link["source"], link["target"]), link)
+
+    if not links:  # fallback: plain edge
+        src, dst = alert.get("source"), alert.get("target")
+        for node_id in (src, dst):
+            if node_id:
+                nodes.setdefault(
+                    node_id,
+                    {"id": node_id, "flagged": True, "types": [t], "primaryType": t},
+                )
+        if src and dst:
+            links[(src, dst)] = {"source": src, "target": dst, "type": t}
+
+    return {"nodes": list(nodes.values()), "links": list(links.values())}
+
+
+async def _emit_new_alerts(alerts: list[dict], accumulated: pd.DataFrame,
+                           seen_alert_keys: set, ws_manager) -> None:
+    """Save + broadcast every alert we have not sent before."""
+    new_alerts = []
+    for alert in alerts:
+        key = _alert_key(alert)
+        if key in seen_alert_keys:
+            continue
+        seen_alert_keys.add(key)
+        new_alerts.append(alert)
+
+    if not new_alerts:
+        return
+
+    # one graph build per detection run, shared by all new alerts
+    try:
+        graph_alerts = get_graph_anomalies(build_graph(accumulated))
+    except Exception:
+        graph_alerts = []
+
+    for alert in new_alerts:
+        save_alert(alert)  # original alert, unchanged
+        enriched = {**alert, "graph": _graph_for_alert(alert, graph_alerts)}
+        await ws_manager.broadcast({"event": "alert", "alert": enriched})
+
+
+# ---------------------------------------------------------------------------
+# Full CSV simulation
+# ---------------------------------------------------------------------------
 async def run_simulation(csv_path: str, ws_manager, batch_size: int = 20, delay_seconds: float = 0.5):
     flows = load_and_normalize(csv_path)
     flows["timestamp"] = pd.to_datetime(
@@ -60,13 +141,7 @@ async def run_simulation(csv_path: str, ws_manager, batch_size: int = 20, delay_
         is_last = start + batch_size >= total
         if batch_num % RUN_DETECTOR_EVERY_N_BATCHES == 0 or is_last:
             alerts = detect_flows(accumulated)
-            for alert in alerts:
-                key = _alert_key(alert)
-                if key in seen_alert_keys:
-                    continue
-                seen_alert_keys.add(key)
-                save_alert(alert)
-                await ws_manager.broadcast({"event": "alert", "alert": alert})
+            await _emit_new_alerts(alerts, accumulated, seen_alert_keys, ws_manager)
 
         if delay_seconds > 0 and not is_last:
             await asyncio.sleep(delay_seconds)
@@ -74,6 +149,9 @@ async def run_simulation(csv_path: str, ws_manager, batch_size: int = 20, delay_
     await ws_manager.broadcast({"event": "simulation_complete", "total_alerts": len(seen_alert_keys)})
 
 
+# ---------------------------------------------------------------------------
+# Presenter-controlled demos
+# ---------------------------------------------------------------------------
 def _build_single_attack_flows(attack_key: str, benign_count: int = 100) -> pd.DataFrame:
     """Build benign + ONE attack, already normalized, ready for the detector."""
     start = datetime(2026, 3, 1, 9, 0, 0)
@@ -116,13 +194,7 @@ async def run_single_attack_demo(attack_key: str, ws_manager, delay_seconds: flo
         is_last = start + batch_size >= total
         if is_last or batch_num % 2 == 0:
             alerts = detect_flows(accumulated)
-            for alert in alerts:
-                key = _alert_key(alert)
-                if key in seen_alert_keys:
-                    continue
-                seen_alert_keys.add(key)
-                save_alert(alert)
-                await ws_manager.broadcast({"event": "alert", "alert": alert})
+            await _emit_new_alerts(alerts, accumulated, seen_alert_keys, ws_manager)
 
         if delay_seconds > 0 and not is_last:
             await asyncio.sleep(delay_seconds)

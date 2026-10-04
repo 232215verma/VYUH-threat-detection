@@ -6,23 +6,26 @@ nodes, connections become edges — and looks at how the SHAPE of that graph
 changes to spot attacks, on top of (and independent from) any single-flow
 check.
 
-Shapes we're looking for (from the design doc):
-    Port scan  -> one node has an edge to one target carrying MANY
-                  distinct destination ports ("star" on ports, not nodes)
-    DDoS       -> one node suddenly has edges arriving from MANY distinct
-                  source nodes ("hub" — high in-degree)
+Shapes we're looking for:
+    Port scan  -> "star": one node fans out to MANY targets (horizontal
+                  sweep) and/or hits MANY ports on one target (vertical scan)
+    DDoS       -> "hub": one node receives edges from MANY distinct sources
     C2/Botnet  -> repeated edge between the same pair, at suspiciously
                   REGULAR time intervals ("beaconing")
-    DGA        -> one node has edges to MANY distinct destination nodes,
-                  each contacted only once or twice
+    DGA        -> one node has edges to MANY distinct destination nodes on
+                  DNS, each contacted only once or twice
     Exfil      -> one node's outbound byte volume is a big outlier
                   compared to every other node in the graph
+
+Every alert that describes a star or hub also carries the full list of
+nodes involved ("targets" / "ports" / "sources"), so the dashboard can
+actually DRAW the shape. Use alert_to_graph_elements(alert) to turn an
+alert into (nodes, links) for the frontend.
 """
 
 from __future__ import annotations
 
 import statistics
-from collections import defaultdict
 
 import networkx as nx
 import pandas as pd
@@ -56,7 +59,7 @@ def build_graph(flows: pd.DataFrame) -> nx.DiGraph:
 
         edge = G[src][dst]
         if pd.notna(row.get("dst_port")):
-            edge["ports"].add(row["dst_port"])
+            edge["ports"].add(int(row["dst_port"]))
         edge["flow_count"] += 1
         if pd.notna(row.get("total_bytes")):
             edge["total_bytes"] += row["total_bytes"]
@@ -88,29 +91,63 @@ def node_metrics(G: nx.DiGraph) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 # Anomaly detection — graph shape -> alert
 # ---------------------------------------------------------------------------
-def detect_port_scans(G: nx.DiGraph, port_threshold: int = 15) -> list[dict]:
+def detect_port_scans(
+    G: nx.DiGraph,
+    port_threshold: int = 15,
+    host_threshold: int = 8,
+    max_targets_in_alert: int = 30,
+) -> list[dict]:
     """
-    Star-on-ports shape: one edge (src -> dst) touching many distinct
-    destination ports. This is what a port scan looks like in the graph.
+    Port-scan shapes (both are a "star" around the scanner):
+
+      (a) vertical   - one src -> one dst touching MANY distinct ports
+      (b) horizontal - one src -> MANY dsts, each with only a few tiny,
+                       non-DNS flows (a host sweep)
+
+    Alerts carry the ports / targets so the frontend can draw a real star.
     """
     alerts = []
+
+    # (a) many ports on one host
     for src, dst, data in G.edges(data=True):
         num_ports = len(data["ports"])
         if num_ports >= port_threshold:
+            ports = sorted(int(p) for p in data["ports"])
             alerts.append({
                 "type": "PortScan",
                 "source": src,
                 "target": dst,
+                "ports": ports[:max_targets_in_alert],
                 "evidence": f"{src} touched {num_ports} distinct ports on {dst}",
                 "confidence": min(0.99, 0.5 + num_ports / 100),
+            })
+
+    # (b) one source sweeping many hosts with tiny, few-flow probes
+    for node in G.nodes:
+        targets = []
+        for _, dst, d in G.out_edges(node, data=True):
+            avg_bytes = d["total_bytes"] / max(d["flow_count"], 1)
+            if d["flow_count"] <= 3 and avg_bytes < 500 and 53 not in d["ports"]:
+                targets.append(dst)
+        if len(targets) >= host_threshold:
+            alerts.append({
+                "type": "PortScan",
+                "source": node,
+                "targets": targets[:max_targets_in_alert],
+                "evidence": f"{node} probed {len(targets)} distinct hosts with tiny flows",
+                "confidence": min(0.99, 0.5 + len(targets) / 60),
             })
     return alerts
 
 
-def detect_ddos(G: nx.DiGraph, indegree_threshold: int = 30) -> list[dict]:
+def detect_ddos(
+    G: nx.DiGraph,
+    indegree_threshold: int = 15,
+    max_sources_in_alert: int = 40,
+) -> list[dict]:
     """
     Hub shape: one node receiving edges from many distinct source nodes.
-    This is what a DDoS (or a botnet reporting home) looks like in the graph.
+    The alert lists the sources so the frontend can draw the hub.
     """
     alerts = []
     for node in G.nodes:
@@ -119,6 +156,7 @@ def detect_ddos(G: nx.DiGraph, indegree_threshold: int = 30) -> list[dict]:
             alerts.append({
                 "type": "DDoS",
                 "target": node,
+                "sources": list(G.predecessors(node))[:max_sources_in_alert],
                 "evidence": f"{node} received connections from {indeg} distinct sources",
                 "confidence": min(0.99, 0.5 + indeg / 300),
             })
@@ -127,22 +165,23 @@ def detect_ddos(G: nx.DiGraph, indegree_threshold: int = 30) -> list[dict]:
 
 def detect_dga(G: nx.DiGraph, outdegree_threshold: int = 12, max_flows_per_edge: int = 2) -> list[dict]:
     """
-    Fan-out shape: one node contacting many distinct destinations, each
-    only once or twice. Real DGA malware never talks to the same
-    (fake, algorithm-generated) domain/IP twice.
+    Fan-out shape: one node contacting many distinct destinations over DNS
+    (port 53), each only once or twice. Real DGA malware never talks to the
+    same (fake, algorithm-generated) domain/IP twice.
     """
     alerts = []
     for node in G.nodes:
-        out_edges = list(G.out_edges(node, data=True))
-        if len(out_edges) < outdegree_threshold:
-            continue
-        mostly_one_off = sum(1 for _, _, d in out_edges if d["flow_count"] <= max_flows_per_edge)
-        if mostly_one_off >= outdegree_threshold:
+        one_off = [
+            dst for _, dst, d in G.out_edges(node, data=True)
+            if d["flow_count"] <= max_flows_per_edge and 53 in d["ports"]
+        ]
+        if len(one_off) >= outdegree_threshold:
             alerts.append({
                 "type": "DGA",
                 "source": node,
-                "evidence": f"{node} contacted {mostly_one_off} distinct destinations, each only 1-2 times",
-                "confidence": min(0.95, 0.4 + mostly_one_off / 80),
+                "targets": one_off[:30],
+                "evidence": f"{node} contacted {len(one_off)} distinct DNS destinations, each only 1-2 times",
+                "confidence": min(0.95, 0.4 + len(one_off) / 80),
             })
     return alerts
 
@@ -205,12 +244,21 @@ def detect_exfiltration(G: nx.DiGraph, zscore_threshold: float = 2.0, min_bytes:
             continue
         z = (m["bytes_out"] - mean) / stdev
         if z >= zscore_threshold:
-            alerts.append({
+            # the biggest outbound destination, so the alert has a link to draw
+            top_dst = max(
+                G.out_edges(node, data=True),
+                key=lambda e: e[2]["total_bytes"],
+                default=None,
+            )
+            alert = {
                 "type": "Exfiltration",
                 "source": node,
                 "evidence": f"{node} sent {m['bytes_out']:,} bytes out — {z:.1f} std devs above average",
                 "confidence": min(0.95, 0.5 + z / 10),
-            })
+            }
+            if top_dst is not None:
+                alert["target"] = top_dst[1]
+            alerts.append(alert)
     return alerts
 
 
@@ -255,6 +303,68 @@ def get_graph_anomalies(G: nx.DiGraph) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Alert -> drawable graph elements (for the dashboard)
+# ---------------------------------------------------------------------------
+def alert_to_graph_elements(alert: dict) -> tuple[list[dict], list[dict]]:
+    """
+    Expand ONE graph alert into (nodes, links) the frontend can draw.
+
+      PortScan (horizontal) -> scanner -> every probed host      (star)
+      PortScan (vertical)   -> scanner -> target + target:port   (star)
+      DDoS                  -> every source -> target            (hub)
+      DGA                   -> bot -> every contacted host       (fan-out)
+      others                -> plain source -> target edge
+
+    Nodes are de-duplicated by id and match the frontend's GraphNode shape
+    {id, flagged, types, primaryType}; links match GraphLink
+    {source, target, type}. Every link endpoint is guaranteed to exist in
+    the returned nodes list (react-force-graph needs that).
+    """
+    t = alert["type"]
+    nodes: dict[str, dict] = {}
+    links: list[dict] = []
+
+    def add_node(node_id: str):
+        if node_id and node_id not in nodes:
+            nodes[node_id] = {"id": node_id, "flagged": True, "types": [t], "primaryType": t}
+
+    def add_link(src: str, dst: str):
+        if src and dst:
+            add_node(src)
+            add_node(dst)
+            links.append({"source": src, "target": dst, "type": t})
+
+    if t == "PortScan":
+        src = alert.get("source")
+        for dst in alert.get("targets", []):
+            add_link(src, dst)
+        if alert.get("ports"):
+            dst = alert.get("target")
+            add_link(src, dst)
+            for p in alert["ports"]:
+                add_link(src, f"{dst}:{p}")
+
+    elif t == "DDoS":
+        target = alert.get("target")
+        for s in alert.get("sources", []):
+            add_link(s, target)
+
+    elif t == "DGA":
+        src = alert.get("source")
+        for dst in alert.get("targets", []):
+            add_link(src, dst)
+
+    else:
+        add_link(alert.get("source"), alert.get("target"))
+        if alert.get("source"):
+            add_node(alert["source"])
+        if alert.get("target"):
+            add_node(alert["target"])
+
+    return list(nodes.values()), links
+
+
+# ---------------------------------------------------------------------------
 # Standalone test
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -282,4 +392,8 @@ if __name__ == "__main__":
     else:
         print(f"Detected {len(anomalies)} anomalies:\n")
         for a in anomalies:
-            print(f"[{a['type']}] confidence={a['confidence']:.2f} — {a['evidence']}")
+            nodes, links = alert_to_graph_elements(a)
+            print(
+                f"[{a['type']}] confidence={a['confidence']:.2f} — {a['evidence']}"
+                f"  (draws {len(nodes)} nodes, {len(links)} links)"
+            )
