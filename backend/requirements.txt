@@ -1,12 +1,9 @@
-# --- Phase 0: needed right now ---
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-
-# --- Phase 1+: uncomment as you get there ---
-# pandas==2.2.2
-# networkx==3.3
-# scikit-learn==1.5.1
-# websockets==13.0
-# pydantic==2.8.2
-# scapy==2.5.0
-# pyshark==0.6
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
+pandas>=2.2.2
+numpy>=1.26.4
+networkx>=3.3
+scikit-learn>=1.5.1
+websockets>=13.0
+pydantic>=2.8.2
+joblib>=1.4.2
