@@ -9,7 +9,7 @@ import { SHOW_SHAPE_EVENT } from "./components/AlertFeed";
 import { Alert, WsMessage } from "./types";
 import { THREAT_INFO, THREAT_ORDER, severityOf } from "./threatInfo";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://vyuh-threat-detection.onrender.com";
 const WS_BASE = API_BASE.replace(/^http/, "ws");
 const RECONNECT_DELAY_MS = 2000;
 

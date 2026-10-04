@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { Alert } from "../types";
 import { THREAT_INFO, SEVERITY_META, LAYER_LABELS, severityOf, alertKey } from "../threatInfo";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://vyuh-threat-detection.onrender.com";
 
 /** Event name App.tsx listens for: "draw this alert's shape on the topology graph". */
 export const SHOW_SHAPE_EVENT = "netgraph:show-shape";
